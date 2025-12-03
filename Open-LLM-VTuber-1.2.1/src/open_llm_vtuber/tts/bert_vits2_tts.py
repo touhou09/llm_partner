@@ -353,7 +353,7 @@ class TTSEngine(TTSInterface):
             error_msg = str(e)
             logger.error(f"❌ HTTP predict failed: {error_msg}")
             raise
-    
+
     def _get_client(self) -> Client:
         """Get or create Gradio client."""
         if self.client is None:
