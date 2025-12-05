@@ -29,7 +29,18 @@ def read_yaml(config_path: str) -> Dict[str, Any]:
         FileNotFoundError: If the configuration file is not found.
         IOError: If the configuration file cannot be read.
     """
-    load_dotenv()
+    # 수정: 최상단 디렉토리의 .env 파일 로드
+    # Open-LLM-VTuber-1.2.1의 부모 디렉토리(최상단)에서 .env 찾기
+    current_file = Path(__file__)
+    # src/open_llm_vtuber/config_manager/utils.py -> Open-LLM-VTuber-1.2.1 -> 최상단
+    top_level_dir = current_file.parent.parent.parent.parent.parent
+    env_path = top_level_dir / ".env"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+        logger.debug(f"Loaded .env from: {env_path}")
+    else:
+        # 최상단에 .env가 없으면 기본 동작 (현재 디렉토리에서 찾기)
+        load_dotenv()
 
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Configuration file not found: {config_path}")

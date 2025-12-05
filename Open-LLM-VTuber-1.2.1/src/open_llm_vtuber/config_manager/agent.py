@@ -3,7 +3,8 @@ This module contains the pydantic model for the configurations of
 different types of agents.
 """
 
-from pydantic import BaseModel, Field
+import os
+from pydantic import BaseModel, Field, model_validator
 from typing import Dict, ClassVar, Optional, Literal, List
 from .i18n import I18nMixin, Description
 from .stateless_llm import StatelessLLMConfigs
@@ -204,6 +205,40 @@ class AgentConfig(I18nMixin, BaseModel):
     ] = Field(..., alias="conversation_agent_choice")
     agent_settings: AgentSettings = Field(..., alias="agent_settings")
     llm_configs: StatelessLLMConfigs = Field(..., alias="llm_configs")
+
+    @model_validator(mode="before")
+    @classmethod
+    def load_mcp_from_env(cls, data: dict) -> dict:
+        """환경 변수에서 MCP 설정을 로드합니다."""
+        # 수정: .env 파일에서 MCP 설정 읽기
+        if isinstance(data, dict):
+            agent_settings = data.get("agent_settings", {})
+            basic_memory_agent = agent_settings.get("basic_memory_agent", {})
+            
+            # USE_MCPP 환경 변수 확인 (true/false, 1/0, yes/no 등)
+            use_mcpp_env = os.getenv("USE_MCPP") or os.getenv("MCP_ENABLED")
+            if use_mcpp_env is not None:
+                use_mcpp_value = use_mcpp_env.lower() in ("true", "1", "yes", "on")
+                # 환경 변수가 있으면 덮어쓰기
+                if "agent_settings" not in data:
+                    data["agent_settings"] = {}
+                if "basic_memory_agent" not in data["agent_settings"]:
+                    data["agent_settings"]["basic_memory_agent"] = {}
+                data["agent_settings"]["basic_memory_agent"]["use_mcpp"] = use_mcpp_value
+            
+            # MCP_ENABLED_SERVERS 환경 변수 확인 (쉼표로 구분된 문자열)
+            mcp_servers_env = os.getenv("MCP_ENABLED_SERVERS")
+            if mcp_servers_env is not None:
+                # 쉼표로 구분된 문자열을 리스트로 변환
+                servers_list = [s.strip() for s in mcp_servers_env.split(",") if s.strip()]
+                # 환경 변수가 있으면 덮어쓰기
+                if "agent_settings" not in data:
+                    data["agent_settings"] = {}
+                if "basic_memory_agent" not in data["agent_settings"]:
+                    data["agent_settings"]["basic_memory_agent"] = {}
+                data["agent_settings"]["basic_memory_agent"]["mcp_enabled_servers"] = servers_list
+        
+        return data
 
     DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
         "conversation_agent_choice": Description(

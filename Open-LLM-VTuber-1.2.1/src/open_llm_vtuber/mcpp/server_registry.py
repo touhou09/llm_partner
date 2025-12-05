@@ -2,6 +2,7 @@
 
 import shutil
 import json
+import os
 
 from pathlib import Path
 from typing import Dict, Optional, Union, Any
@@ -16,8 +17,24 @@ DEFAULT_CONFIG_PATH = "mcp_servers.json"
 class ServerRegistry:
     """MCP Server Manager for managing server files."""
 
-    def __init__(self, config_path: str | Path = DEFAULT_CONFIG_PATH) -> None:
+    def __init__(self, config_path: str | Path = None) -> None:
         """Initialize the MCP Server Manager."""
+        # 수정: 환경 변수에서 mcp_servers.json 경로 읽기
+        if config_path is None:
+            # MCP_SERVERS_CONFIG 환경 변수 확인
+            env_config_path = os.getenv("MCP_SERVERS_CONFIG")
+            if env_config_path:
+                config_path = Path(env_config_path)
+                # 상대 경로인 경우 최상단 디렉토리 기준으로 해석
+                if not config_path.is_absolute():
+                    # 현재 파일 위치에서 최상단 디렉토리 찾기
+                    # src/open_llm_vtuber/mcpp/server_registry.py -> Open-LLM-VTuber-1.2.1 -> 최상단
+                    current_file = Path(__file__)
+                    top_level_dir = current_file.parent.parent.parent.parent.parent
+                    config_path = top_level_dir / config_path
+            else:
+                config_path = DEFAULT_CONFIG_PATH
+        
         try:
             config_path = validate_file(config_path, ".json")
         except ValueError:
@@ -80,11 +97,33 @@ class ServerRegistry:
                     )
                     continue
 
+            # 수정: env 필드에서 환경 변수 참조 처리
+            env_dict = server_details.get("env", None)
+            if env_dict:
+                # env 딕셔너리의 값이 "${VAR_NAME}" 형식이면 환경 변수에서 읽기
+                processed_env = {}
+                for key, value in env_dict.items():
+                    if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
+                        # ${VAR_NAME} 형식에서 VAR_NAME 추출
+                        env_var_name = value[2:-1]
+                        env_value = os.getenv(env_var_name)
+                        if env_value:
+                            processed_env[key] = env_value
+                        else:
+                            logger.warning(
+                                f"MCPSR: Environment variable '{env_var_name}' not found for server '{server_name}'. "
+                                f"Using empty string."
+                            )
+                            processed_env[key] = ""
+                    else:
+                        processed_env[key] = value
+                env_dict = processed_env
+            
             self.servers[server_name] = MCPServer(
                 name=server_name,
                 command=command,
                 args=server_details["args"],
-                env=server_details.get("env", None),
+                env=env_dict,
                 cwd=server_details.get("cwd", None),
                 timeout=server_details.get("timeout", None),
             )
