@@ -18,6 +18,9 @@ from .mcpp.mcp_client import MCPClient
 from .mcpp.tool_executor import ToolExecutor
 from .mcpp.tool_adapter import ToolAdapter
 
+# 수정: Obsidian Vault Manager import 추가
+from .obsidian import ObsidianVaultManager
+
 from .asr.asr_factory import ASRFactory
 from .tts.tts_factory import TTSFactory
 from .vad.vad_factory import VADFactory
@@ -61,6 +64,9 @@ class ServiceContext:
         self.mcp_client: MCPClient | None = None
         self.tool_executor: ToolExecutor | None = None
 
+        # 수정: Obsidian Vault Manager 추가
+        self.obsidian_vault_manager: ObsidianVaultManager | None = None
+
         # the system prompt is a combination of the persona prompt and live2d expression prompt
         self.system_prompt: str = None
 
@@ -87,7 +93,8 @@ class ServiceContext:
             f"  VAD Engine: {type(self.vad_engine).__name__ if self.vad_engine else 'Not Loaded'}\n"
             f"    Agent Config: {json.dumps(self.character_config.vad_config.model_dump(), indent=6) if self.character_config.vad_config else 'None'}\n"
             f"  System Prompt: {self.system_prompt or 'Not Set'}\n"
-            f"  MCP Enabled: {'Yes' if self.mcp_client else 'No'}"
+            f"  MCP Enabled: {'Yes' if self.mcp_client else 'No'}\n"
+            f"  Obsidian Vault: {'Enabled' if self.obsidian_vault_manager else 'Disabled'}"
         )
 
     # ==== Initializers
@@ -238,6 +245,9 @@ class ServiceContext:
         self.send_text = send_text
         self.client_uid = client_uid
 
+        # 수정: Obsidian Vault Manager 초기화
+        self.init_obsidian_vault(system_config)
+
         # Initialize session-specific MCP components
         await self._init_mcp_components(
             self.character_config.agent_config.agent_settings.basic_memory_agent.use_mcpp,
@@ -276,6 +286,9 @@ class ServiceContext:
 
         # init vad from character config
         self.init_vad(config.character_config.vad_config)
+
+        # 수정: Obsidian Vault Manager 초기화
+        self.init_obsidian_vault(config.system_config)
 
         # Initialize shared ToolAdapter if it doesn't exist yet
         if (
@@ -347,6 +360,34 @@ class ServiceContext:
     def init_vad(self, vad_config: VADConfig) -> None:
         if vad_config.vad_model is None:
             logger.info("VAD is disabled.")
+
+    # 수정: Obsidian Vault Manager 초기화 메서드 추가
+    def init_obsidian_vault(self, system_config: SystemConfig) -> None:
+        """Initialize Obsidian Vault Manager if vault path is configured.
+
+        Args:
+            system_config: System configuration containing obsidian_vault_path.
+        """
+        if system_config.obsidian_vault_path:
+            try:
+                self.obsidian_vault_manager = ObsidianVaultManager(
+                    system_config.obsidian_vault_path
+                )
+                logger.info(
+                    f"Obsidian Vault Manager initialized: {system_config.obsidian_vault_path}"
+                )
+            except ValueError as e:
+                logger.warning(f"Failed to initialize Obsidian Vault Manager: {e}")
+                self.obsidian_vault_manager = None
+            except Exception as e:
+                logger.error(
+                    f"Unexpected error initializing Obsidian Vault Manager: {e}",
+                    exc_info=True,
+                )
+                self.obsidian_vault_manager = None
+        else:
+            logger.debug("Obsidian Vault path not configured. Skipping initialization.")
+            self.obsidian_vault_manager = None
             self.vad_engine = None
             return
 

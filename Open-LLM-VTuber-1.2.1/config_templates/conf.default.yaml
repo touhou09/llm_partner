@@ -24,6 +24,10 @@ system_config:
     # speakable_prompt: 'speakable_prompt'
     # Additional guidance for LLM on how to use tools
     # tool_guidance_prompt: 'tool_guidance_prompt' 
+  # Obsidian Vault path for note management (optional)
+  # Set this to enable Obsidian Vault integration for reading/writing notes
+  # Example: obsidian_vault_path: '/mnt/c/Users/yujin/iCloudDrive/iCloud~md~obsidian/Obsidian'
+  # obsidian_vault_path: null
 
 # configuration for the default character
 character_config:

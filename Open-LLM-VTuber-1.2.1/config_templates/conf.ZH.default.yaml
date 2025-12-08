@@ -26,6 +26,10 @@ system_config:
     # speakable_prompt: 'speakable_prompt'
     # 额外指导 LLM 如何使用工具的提示词
     # tool_guidance_prompt: 'tool_guidance_prompt' 
+  # Obsidian Vault 路径，用于笔记管理（可选）
+  # 设置此项以启用 Obsidian Vault 集成，用于读取/写入笔记
+  # 示例: obsidian_vault_path: '/mnt/c/Users/yujin/iCloudDrive/iCloud~md~obsidian/Obsidian'
+  # obsidian_vault_path: null
 
 # 默认角色的配置
 character_config:
