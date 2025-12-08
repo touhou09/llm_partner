@@ -360,6 +360,19 @@ class ServiceContext:
     def init_vad(self, vad_config: VADConfig) -> None:
         if vad_config.vad_model is None:
             logger.info("VAD is disabled.")
+            self.vad_engine = None
+            return
+
+        if not self.vad_engine or (self.character_config.vad_config != vad_config):
+            logger.info(f"Initializing VAD: {vad_config.vad_model}")
+            self.vad_engine = VADFactory.get_vad_engine(
+                vad_config.vad_model,
+                **getattr(vad_config, vad_config.vad_model.lower()).model_dump(),
+            )
+            # saving config should be done after successful initialization
+            self.character_config.vad_config = vad_config
+        else:
+            logger.info("VAD already initialized with the same config.")
 
     # 수정: Obsidian Vault Manager 초기화 메서드 추가
     def init_obsidian_vault(self, system_config: SystemConfig) -> None:
