@@ -140,3 +140,8 @@ python3 app.py --server-name 0.0.0.0 --no-autolaunch --share
 - Added a shared repo knowledge base and agent working rules in `.agent/REPO_CONTEXT.md`.
 - Updated `Open-LLM-VTuber-1.2.1/conf.yaml` persona prompt for Ame (English default, Japanese support, interview-style flow).
 - Added `test_repo_context.py` to sanity-check required sections in the shared context doc.
+- Added `.agent/CLAUDE.md` for tool-specific guidance.
+- Added `Open-LLM-VTuber-1.2.1/src/open_llm_vtuber/mcpp/internal_tools.py` and updated MCP tooling integration files.
+- Updated TTS integration pieces in `Open-LLM-VTuber-1.2.1/src/open_llm_vtuber/tts/bert_vits2_tts.py` and related config managers.
+- Added `test_lang_detect_tts.py` for language-detection TTS checks.
+- Added `install.sh` helper script.
