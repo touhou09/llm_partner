@@ -13,6 +13,7 @@ from typing import (
 from .types import ToolCallObject
 from .mcp_client import MCPClient
 from .tool_manager import ToolManager
+from .internal_tools import execute_obsidian_tool
 
 
 class ToolExecutor:
@@ -20,9 +21,11 @@ class ToolExecutor:
         self,
         mcp_client: MCPClient,
         tool_manager: ToolManager,
+        obsidian_vault_manager=None,
     ):
         self._mcp_client = mcp_client
         self._tool_manager = tool_manager
+        self._obsidian_vault_manager = obsidian_vault_manager
 
     def parse_tool_call(self, call: Union[Dict[str, Any], ToolCallObject]) -> tuple:
         """Parse tool call from different formats.
@@ -324,6 +327,30 @@ class ToolExecutor:
             text_content = f"Error: Tool '{tool_name}' is not available."
             content_items = [{"type": "error", "text": text_content}]
             is_error = True
+        # 수정: 내부 Obsidian 도구 처리
+        elif tool_info.related_server == "__internal__obsidian":
+            try:
+                result_dict = await execute_obsidian_tool(
+                    tool_name, tool_input, self._obsidian_vault_manager
+                )
+                metadata = result_dict.get("metadata", {})
+                content_items = result_dict.get("content_items", [])
+
+                if content_items and content_items[0].get("type") == "error":
+                    is_error = True
+                    text_content = content_items[0].get(
+                        "text", "Unknown error from Obsidian tool execution."
+                    )
+                elif content_items and content_items[0].get("type") == "text":
+                    text_content = content_items[0].get("text", "")
+
+                if not is_error:
+                    logger.info(f"Obsidian tool '{tool_name}' executed successfully.")
+            except Exception as e:
+                logger.exception(f"Error executing Obsidian tool '{tool_name}': {e}")
+                text_content = f"Error executing Obsidian tool '{tool_name}': {e}"
+                content_items = [{"type": "error", "text": text_content}]
+                is_error = True
         elif not tool_info.related_server:
             logger.error(f"Tool '{tool_name}' does not have a related server defined.")
             text_content = f"Error: Configuration error for tool '{tool_name}'. No server specified."

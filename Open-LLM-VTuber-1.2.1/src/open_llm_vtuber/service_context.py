@@ -142,7 +142,9 @@ class ServiceContext:
                 )
 
                 # 3. Initialize ToolManager with the fetched formatted tools
-
+                # 수정: get_tools에서 이미 formatted_tools_dict를 가져왔으므로, 
+                # raw_tools_dict를 얻기 위해 get_server_and_tool_info를 다시 호출
+                # 이때 Obsidian 도구도 포함되어야 함
                 _, raw_tools_dict = await self.tool_adapter.get_server_and_tool_info(
                     enabled_servers
                 )
@@ -175,7 +177,12 @@ class ServiceContext:
 
             # 5. Initialize ToolExecutor
             if self.mcp_client and self.tool_manager:
-                self.tool_executor = ToolExecutor(self.mcp_client, self.tool_manager)
+                # 수정: Obsidian Vault Manager를 ToolExecutor에 전달
+                self.tool_executor = ToolExecutor(
+                    self.mcp_client,
+                    self.tool_manager,
+                    obsidian_vault_manager=self.obsidian_vault_manager,
+                )
                 logger.info("ToolExecutor initialized for this session.")
             else:
                 logger.warning(
@@ -248,6 +255,10 @@ class ServiceContext:
         # 수정: Obsidian Vault Manager 초기화
         self.init_obsidian_vault(system_config)
 
+        # 수정: tool_adapter가 이미 존재하는 경우 Obsidian Vault Manager 업데이트
+        if self.tool_adapter:
+            self.tool_adapter.obsidian_vault_manager = self.obsidian_vault_manager
+
         # Initialize session-specific MCP components
         await self._init_mcp_components(
             self.character_config.agent_config.agent_settings.basic_memory_agent.use_mcpp,
@@ -301,7 +312,11 @@ class ServiceContext:
                 )
                 self.mcp_server_registery = ServerRegistry()
             logger.info("Initializing shared ToolAdapter within load_from_config.")
-            self.tool_adapter = ToolAdapter(server_registery=self.mcp_server_registery)
+            # 수정: Obsidian Vault Manager를 ToolAdapter에 전달
+            self.tool_adapter = ToolAdapter(
+                server_registery=self.mcp_server_registery,
+                obsidian_vault_manager=self.obsidian_vault_manager,
+            )
 
         # Initialize MCP Components before initializing Agent
         await self._init_mcp_components(
@@ -401,19 +416,6 @@ class ServiceContext:
         else:
             logger.debug("Obsidian Vault path not configured. Skipping initialization.")
             self.obsidian_vault_manager = None
-            self.vad_engine = None
-            return
-
-        if not self.vad_engine or (self.character_config.vad_config != vad_config):
-            logger.info(f"Initializing VAD: {vad_config.vad_model}")
-            self.vad_engine = VADFactory.get_vad_engine(
-                vad_config.vad_model,
-                **getattr(vad_config, vad_config.vad_model.lower()).model_dump(),
-            )
-            # saving config should be done after successful initialization
-            self.character_config.vad_config = vad_config
-        else:
-            logger.info("VAD already initialized with the same config.")
 
     async def init_agent(self, agent_config: AgentConfig, persona_prompt: str) -> None:
         """Initialize or update the LLM engine based on agent configuration."""

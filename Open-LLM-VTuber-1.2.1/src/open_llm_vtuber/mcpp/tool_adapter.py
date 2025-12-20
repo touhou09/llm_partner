@@ -6,14 +6,25 @@ from loguru import logger
 from .types import FormattedTool
 from .mcp_client import MCPClient
 from .server_registry import ServerRegistry
+from .internal_tools import get_obsidian_tools
 
 
 class ToolAdapter:
     """Dynamically fetches tool information from enabled MCP servers and formats it."""
 
-    def __init__(self, server_registery: Optional[ServerRegistry] = None) -> None:
-        """Initialize with an ServerRegistry."""
+    def __init__(
+        self,
+        server_registery: Optional[ServerRegistry] = None,
+        obsidian_vault_manager=None,
+    ) -> None:
+        """Initialize with an ServerRegistry.
+
+        Args:
+            server_registery: ServerRegistry instance for external MCP servers.
+            obsidian_vault_manager: ObsidianVaultManager instance for internal Obsidian tools.
+        """
         self.server_registery = server_registery or ServerRegistry()
+        self.obsidian_vault_manager = obsidian_vault_manager
 
     async def get_server_and_tool_info(
         self, enabled_servers: List[str]
@@ -22,9 +33,28 @@ class ToolAdapter:
         servers_info: Dict[str, Dict[str, str]] = {}
         formatted_tools: Dict[str, FormattedTool] = {}
 
+        # 수정: Obsidian 도구는 enabled_servers와 관계없이 항상 추가
+        # 먼저 Obsidian 도구를 추가하여 외부 서버 도구와 충돌하지 않도록 함
+        obsidian_tool_count = 0
+        if self.obsidian_vault_manager:
+            obsidian_tools = get_obsidian_tools(self.obsidian_vault_manager)
+            if obsidian_tools:
+                servers_info["__internal__obsidian"] = {}
+                for tool_name, tool in obsidian_tools.items():
+                    servers_info["__internal__obsidian"][tool_name] = {
+                        "description": tool.description,
+                        "parameters": tool.input_schema.get("properties", {}),
+                        "required": tool.input_schema.get("required", []),
+                    }
+                    formatted_tools[tool_name] = tool
+                obsidian_tool_count = len(obsidian_tools)
+                logger.info(
+                    f"MC: Added {obsidian_tool_count} internal Obsidian tools to formatted_tools_dict."
+                )
+
         if not enabled_servers:
             logger.warning(
-                "MC: No enabled MCP servers specified. Cannot fetch tool info."
+                "MC: No enabled MCP servers specified. Cannot fetch tool info from external servers."
             )
             return servers_info, formatted_tools
 
@@ -77,8 +107,8 @@ class ToolAdapter:
                         servers_info[server_name] = {}
                     continue  # Continue to next server
 
-        logger.debug(
-            f"MC: Finished fetching tool info. Found {len(formatted_tools)} tools across enabled servers."
+        logger.info(
+            f"MC: Finished fetching tool info. Total: {len(formatted_tools)} tools (External: {len(formatted_tools) - obsidian_tool_count}, Obsidian: {obsidian_tool_count})"
         )
         return servers_info, formatted_tools
 
@@ -147,7 +177,11 @@ class ToolAdapter:
             )
             return openai_tools, claude_tools
 
-        logger.debug(f"MC: Formatting {len(formatted_tools_dict)} tools for API usage.")
+        logger.info(f"MC: Formatting {len(formatted_tools_dict)} tools for API usage.")
+        # 수정: Obsidian 도구 확인을 위한 로그 추가
+        obsidian_tool_count = sum(1 for name in formatted_tools_dict.keys() if name.startswith("obsidian_"))
+        if obsidian_tool_count > 0:
+            logger.info(f"MC: Found {obsidian_tool_count} Obsidian tools in formatted_tools_dict.")
 
         for tool_name, data_object in formatted_tools_dict.items():
             if not isinstance(data_object, FormattedTool):
@@ -228,5 +262,7 @@ class ToolAdapter:
         )
         mcp_prompt_string = self.construct_mcp_prompt_string(servers_info)
         openai_tools, claude_tools = self.format_tools_for_api(formatted_tools_dict)
-        logger.info("MC: Dynamic tool construction complete.")
+        logger.info(
+            f"MC: Dynamic tool construction complete. Total tools: {len(formatted_tools_dict)} (OpenAI: {len(openai_tools)}, Claude: {len(claude_tools)})"
+        )
         return mcp_prompt_string, openai_tools, claude_tools

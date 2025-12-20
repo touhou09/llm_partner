@@ -284,12 +284,26 @@ character_config:
       # Bert-VITS2 TTS connects to the Gradio webui
       # Check Hololive-Style-Bert-VITS2 documentation for deployment
       client_url: 'http://127.0.0.1:7860' # Bert-VITS2 Gradio server URL
-      model_name: 'mori' # Model name (e.g., 'mori', 'gura')
-      model_path: 'model_assets/mori/mori.safetensors' # Path to model file
-      speaker: 'Mori' # Speaker ID
-      language: 'EN' # Language: EN, JP, or ZH
-      style: 'Neutral' # Style preset (e.g., 'Neutral', or other available styles)
-      style_weight: 3.0 # Style intensity (0-20)
+      auto_detect_language: true # Auto-detect EN/JP from text content
+      default_language: 'EN' # Default language when auto-detect is off (EN or JP)
+
+      # English settings
+      en:
+        model_name: 'mori'
+        model_path: 'model_assets/mori/mori.safetensors'
+        speaker: 'Mori'
+        style: 'Neutral'
+        style_weight: 3.0
+
+      # Japanese settings (configure if needed)
+      jp:
+        model_name: 'jp_model'
+        model_path: 'model_assets/jp_model/jp_model.safetensors'
+        speaker: 'Speaker'
+        style: 'Neutral'
+        style_weight: 3.0
+
+      # Common audio settings
       sdp_ratio: 0.2 # SDP ratio (0-1)
       noise_scale: 0.6 # Noise scale (0.1-2)
       noise_scale_w: 0.8 # Noise scale W (0.1-2)

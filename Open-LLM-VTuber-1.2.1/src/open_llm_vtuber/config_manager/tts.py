@@ -431,16 +431,36 @@ class MinimaxTTSConfig(I18nMixin):
     }
 
 
+class BertVITS2LanguageConfig(I18nMixin):
+    """Language-specific configuration for Bert-VITS2 TTS."""
+
+    model_name: str = Field(..., alias="model_name")
+    model_path: str = Field(..., alias="model_path")
+    speaker: str = Field(..., alias="speaker")
+    style: str = Field("Neutral", alias="style")
+    style_weight: float = Field(3.0, alias="style_weight")
+
+    DESCRIPTIONS: ClassVar[Dict[str, Description]] = {
+        "model_name": Description(en="Model name", zh="模型名称"),
+        "model_path": Description(en="Path to model file", zh="模型文件路径"),
+        "speaker": Description(en="Speaker ID", zh="说话人 ID"),
+        "style": Description(en="Style preset name", zh="风格预设名称"),
+        "style_weight": Description(en="Style intensity (0-20)", zh="风格强度（0-20）"),
+    }
+
+
 class BertVITS2TTSConfig(I18nMixin):
     """Configuration for Bert-VITS2 TTS."""
 
     client_url: str = Field(..., alias="client_url")
-    model_name: str = Field(..., alias="model_name")
-    model_path: str = Field(..., alias="model_path")
-    speaker: str = Field(..., alias="speaker")
-    language: str = Field(..., alias="language")
-    style: str = Field("Neutral", alias="style")
-    style_weight: float = Field(3.0, alias="style_weight")
+    auto_detect_language: bool = Field(True, alias="auto_detect_language")
+    default_language: str = Field("EN", alias="default_language")
+
+    # Language-specific settings (required when auto_detect_language is True)
+    en: Optional[BertVITS2LanguageConfig] = Field(None, alias="en")
+    jp: Optional[BertVITS2LanguageConfig] = Field(None, alias="jp")
+
+    # Common audio settings
     sdp_ratio: float = Field(0.2, alias="sdp_ratio")
     noise_scale: float = Field(0.6, alias="noise_scale")
     noise_scale_w: float = Field(0.8, alias="noise_scale_w")
@@ -456,16 +476,21 @@ class BertVITS2TTSConfig(I18nMixin):
         "client_url": Description(
             en="URL of the Bert-VITS2 Gradio server", zh="Bert-VITS2 Gradio 服务器的 URL"
         ),
-        "model_name": Description(en="Model name (e.g., 'Gura')", zh="模型名称（如 'Gura'）"),
-        "model_path": Description(
-            en="Path to model file (.safetensors)", zh="模型文件路径（.safetensors）"
+        "auto_detect_language": Description(
+            en="Auto-detect EN/JP from text content", zh="自动检测文本语言（EN/JP）"
         ),
-        "speaker": Description(en="Speaker ID", zh="说话人 ID"),
-        "language": Description(
-            en="Language code (EN, JP, ZH)", zh="语言代码（EN、JP、ZH）"
+        "default_language": Description(
+            en="Default language when auto-detect is off (EN or JP)",
+            zh="自动检测关闭时的默认语言（EN 或 JP）",
         ),
-        "style": Description(en="Style preset name", zh="风格预设名称"),
-        "style_weight": Description(en="Style intensity (0-20)", zh="风格强度（0-20）"),
+        "en": Description(
+            en="English language settings (model, speaker, style)",
+            zh="英语设置（模型、说话人、风格）",
+        ),
+        "jp": Description(
+            en="Japanese language settings (model, speaker, style)",
+            zh="日语设置（模型、说话人、风格）",
+        ),
         "sdp_ratio": Description(en="SDP ratio (0-1)", zh="SDP 比率（0-1）"),
         "noise_scale": Description(en="Noise scale (0.1-2)", zh="噪声比例（0.1-2）"),
         "noise_scale_w": Description(en="Noise scale W (0.1-2)", zh="噪声 W 比例（0.1-2）"),

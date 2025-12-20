@@ -19,18 +19,66 @@ from loguru import logger
 from .tts_interface import TTSInterface
 
 
+def detect_language(text: str) -> str:
+    """
+    Detect language from text (EN or JP only).
+
+    Detection logic:
+    - If Japanese characters (hiragana, katakana, or kanji with Japanese context) found -> JP
+    - Otherwise -> EN
+
+    Args:
+        text: Input text to analyze
+
+    Returns:
+        'JP' or 'EN'
+    """
+    # Japanese character ranges
+    # Hiragana: U+3040 - U+309F
+    # Katakana: U+30A0 - U+30FF
+    # CJK (Kanji): U+4E00 - U+9FFF
+
+    hiragana_count = 0
+    katakana_count = 0
+    kanji_count = 0
+    latin_count = 0
+
+    for char in text:
+        code = ord(char)
+        if 0x3040 <= code <= 0x309F:  # Hiragana
+            hiragana_count += 1
+        elif 0x30A0 <= code <= 0x30FF:  # Katakana
+            katakana_count += 1
+        elif 0x4E00 <= code <= 0x9FFF:  # CJK (Kanji)
+            kanji_count += 1
+        elif code < 128 and char.isalpha():  # ASCII letters
+            latin_count += 1
+
+    # If any hiragana or katakana found, it's Japanese
+    if hiragana_count > 0 or katakana_count > 0:
+        return "JP"
+
+    # If kanji found, check context (could be Chinese, but we don't support ZH)
+    # Treat kanji-only text as Japanese
+    if kanji_count > 0:
+        return "JP"
+
+    # Default to English
+    return "EN"
+
+
 class TTSEngine(TTSInterface):
     """Bert-VITS2 TTS Engine using Gradio Client."""
 
     def __init__(
         self,
         client_url: str = "http://127.0.0.1:7860",
-        model_name: str = "",
-        model_path: str = "",
-        speaker: str = "",
-        language: str = "EN",
-        style: str = "Neutral",
-        style_weight: float = 3.0,
+        auto_detect_language: bool = True,
+        default_language: str = "EN",
+        # Language-specific settings (dict with model_name, model_path, speaker, style, style_weight)
+        en: Optional[dict] = None,
+        jp: Optional[dict] = None,
+        # Common audio settings
         sdp_ratio: float = 0.2,
         noise_scale: float = 0.6,
         noise_scale_w: float = 0.8,
@@ -43,16 +91,14 @@ class TTSEngine(TTSInterface):
         reference_audio_path: Optional[str] = None,
     ):
         """
-        Initialize Bert-VITS2 TTS Engine.
+        Initialize Bert-VITS2 TTS Engine with per-language settings.
 
         Args:
             client_url: URL of the Bert-VITS2 Gradio server
-            model_name: Model name (e.g., 'mori')
-            model_path: Path to model file
-            speaker: Speaker ID
-            language: Language code (EN, JP, ZH)
-            style: Style preset name (e.g., 'Neutral')
-            style_weight: Style intensity (0-20)
+            auto_detect_language: Auto-detect EN/JP from text content (default: True)
+            default_language: Default language when auto-detect is off (EN or JP)
+            en: English settings dict (model_name, model_path, speaker, style, style_weight)
+            jp: Japanese settings dict (model_name, model_path, speaker, style, style_weight)
             sdp_ratio: SDP ratio (0-1)
             noise_scale: Noise scale (0.1-2)
             noise_scale_w: Noise scale W (0.1-2)
@@ -65,23 +111,21 @@ class TTSEngine(TTSInterface):
             reference_audio_path: Path to reference audio for style
         """
         self.client_url = client_url
-        self.model_name = model_name
-        # 수정: model_path 처리 - conf.yaml에서 절대 경로나 상대 경로 모두 사용 가능
-        # 절대 경로는 그대로 사용, 상대 경로는 Open-LLM-VTuber-1.2.1 디렉토리 기준으로 절대 경로로 변환
-        if model_path:
-            if os.path.isabs(model_path):
-                self.model_path = model_path
-            else:
-                # 상대 경로인 경우 Open-LLM-VTuber-1.2.1 디렉토리 기준으로 절대 경로로 변환
-                # conf.yaml이 Open-LLM-VTuber-1.2.1 디렉토리에 있으므로 그 기준으로 해석
-                base_dir = Path(__file__).parent.parent.parent.parent  # Open-LLM-VTuber-1.2.1 디렉토리
-                self.model_path = str((base_dir / model_path).resolve())
-        else:
-            self.model_path = model_path
-        self.speaker = speaker
-        self.language = language
-        self.style = style
-        self.style_weight = style_weight
+        self.auto_detect_language = auto_detect_language
+        self.default_language = default_language
+
+        # Store language-specific configs
+        self._lang_configs = {"EN": en or {}, "JP": jp or {}}
+
+        # Process model paths (convert relative to absolute)
+        base_dir = Path(__file__).parent.parent.parent.parent  # Open-LLM-VTuber-1.2.1 디렉토리
+        for lang, config in self._lang_configs.items():
+            if config.get("model_path"):
+                model_path = config["model_path"]
+                if not os.path.isabs(model_path):
+                    config["model_path"] = str((base_dir / model_path).resolve())
+
+        # Common settings
         self.sdp_ratio = sdp_ratio
         self.noise_scale = noise_scale
         self.noise_scale_w = noise_scale_w
@@ -94,12 +138,27 @@ class TTSEngine(TTSInterface):
         self.reference_audio_path = reference_audio_path
 
         self.client: Optional[Client] = None
-        # 수정: output_dir을 클래스 변수로 관리하여 재사용
         self._output_dir: Optional[str] = None
-        # 수정: HTTP 클라이언트 추가 (WebSocket 우회용)
         self._http_client: Optional[httpx.Client] = None
         self._api_info: Optional[dict] = None
-        logger.info(f"🎤 Initialized Bert-VITS2 TTS Engine at {client_url}")
+
+        # Log initialization
+        lang_info = []
+        for lang, config in self._lang_configs.items():
+            if config.get("model_name"):
+                lang_info.append(f"{lang}={config.get('speaker', 'N/A')}")
+        logger.info(f"🎤 Initialized Bert-VITS2 TTS Engine at {client_url} [{', '.join(lang_info)}]")
+
+    def _get_lang_config(self, language: str) -> dict:
+        """Get language-specific configuration."""
+        config = self._lang_configs.get(language, {})
+        if not config.get("model_name"):
+            # Fallback to default language if current language config is missing
+            fallback_lang = "EN" if language == "JP" else "JP"
+            config = self._lang_configs.get(fallback_lang, {})
+            if config.get("model_name"):
+                logger.warning(f"⚠️ No config for {language}, falling back to {fallback_lang}")
+        return config
 
     def _get_api_info(self) -> dict:
         """수정: gradio_client를 사용하여 API 정보 가져오기 (초기화된 client 활용)"""
@@ -462,6 +521,32 @@ class TTSEngine(TTSInterface):
         # Clean text (remove special markers)
         cleaned_text = re.sub(r"\[.*?\]", "", text)
 
+        # Detect language if auto_detect_language is enabled
+        if self.auto_detect_language:
+            detected_lang = detect_language(cleaned_text)
+            if detected_lang != self.default_language:
+                logger.info(
+                    f"🌐 Language auto-detected: {detected_lang} (default: {self.default_language})"
+                )
+            current_language = detected_lang
+        else:
+            current_language = self.default_language
+
+        # Validate language (only EN and JP supported)
+        if current_language not in ("EN", "JP"):
+            logger.warning(
+                f"⚠️ Unsupported language '{current_language}', falling back to EN"
+            )
+            current_language = "EN"
+
+        # Korean text warning (will be processed as EN)
+        korean_pattern = re.compile(r'[\uAC00-\uD7AF\u1100-\u11FF]')
+        if korean_pattern.search(cleaned_text):
+            logger.warning(
+                f"🇰🇷 Korean text detected. Korean is not supported, processing as {current_language}. "
+                f"Text: {cleaned_text[:50]}..."
+            )
+
         if len(cleaned_text) < 2:
             logger.warning("Text too short for TTS generation")
             return ""
@@ -469,34 +554,30 @@ class TTSEngine(TTSInterface):
         try:
             client = self._get_client()
 
-            # 수정: gradio-client 2.x에 맞게 파라미터 이름 변경
-            # reference_audio는 Audio 타입이므로 None 또는 파일 경로를 전달
+            # Get language-specific config
+            lang_config = self._get_lang_config(current_language)
+            if not lang_config.get("model_name"):
+                logger.error(f"❌ No model configured for language: {current_language}")
+                return ""
+
+            model_name = lang_config.get("model_name", "")
+            model_path = lang_config.get("model_path", "")
+            speaker = lang_config.get("speaker", "")
+            style = lang_config.get("style", "Neutral")
+            style_weight = lang_config.get("style_weight", 3.0)
+
             reference_audio = None
             if self.reference_audio_path:
                 reference_audio = self.reference_audio_path
-            
-            # 수정: WebSocket 403 에러 해결을 위해 submit + result() 방식 사용 (HTTP만 사용)
-            # app.py의 tts_fn 함수 시그니처에 맞게 파라미터 순서 조정
-            # 순서: model_name, model_path, text, language, reference_audio_path, sdp_ratio,
-            #       noise_scale, noise_scale_w, length_scale, line_split, split_interval,
-            #       assist_text, assist_text_weight, use_assist_text, style, style_weight,
-            #       kata_tone_json_str, use_tone, speaker
-            # 참고: app.py에서는 assist_text, assist_text_weight, use_assist_text를 사용하지만
-            #       Gradio UI에서는 style_text, style_text_weight, use_style_text로 표시됨
-            #       실제 함수 파라미터는 assist_text를 사용하므로 위치 인자로 전달
-            
-            # 수정: use_ws=False로 설정했으므로 submit() + result() 방식 사용
-            # HTTP 모드에서는 submit() + result()가 올바르게 작동해야 함
-            # 수정: gradio_client의 deserialize 문제를 피하기 위해 직접 HTTP API 호출 사용
-            # submit() + result()는 오디오 파일 deserialize에서 실패하므로 _predict_via_http 사용
-            logger.info("🌐 Using direct HTTP API call (bypassing gradio_client deserialize)...")
-            
+
+            logger.info(f"🌐 TTS: lang={current_language}, speaker={speaker}, model={model_name}")
+
             # HTTP API를 직접 호출하여 WebSocket 완전 우회 및 deserialize 문제 해결
             data = [
-                self.model_name,  # model_name
-                self.model_path,  # model_path
+                model_name,  # model_name
+                model_path,  # model_path
                 cleaned_text,  # text
-                self.language,  # language
+                current_language,  # language (auto-detected or default)
                 reference_audio,  # reference_audio_path
                 self.sdp_ratio,  # sdp_ratio
                 self.noise_scale,  # noise_scale
@@ -507,11 +588,11 @@ class TTSEngine(TTSInterface):
                 self.style_text if self.use_style_text else "",  # assist_text
                 self.style_text_weight,  # assist_text_weight
                 self.use_style_text,  # use_assist_text
-                self.style,  # style
-                self.style_weight,  # style_weight
+                style,  # style
+                style_weight,  # style_weight
                 "",  # kata_tone_json_str
                 False,  # use_tone
-                self.speaker,  # speaker
+                speaker,  # speaker
             ]
             
             # HTTP API 직접 호출
