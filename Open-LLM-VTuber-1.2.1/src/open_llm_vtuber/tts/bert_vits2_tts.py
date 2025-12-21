@@ -6,13 +6,10 @@ This module provides integration with Hololive-Style-Bert-VITS2 via Gradio Clien
 
 import os
 import re
-import json
-import base64
 from pathlib import Path
 from typing import Optional
 
 import httpx
-import numpy as np
 from gradio_client import Client
 from loguru import logger
 
@@ -180,17 +177,11 @@ class TTSEngine(TTSInterface):
                     
                     response = self._http_client.get(self.client_url)
                     response.raise_for_status()
-                    html = response.text
-                    
-                    # JavaScript 변수에서 API 정보 추출 시도
-                    import re
-                    # window.gradio_config 또는 유사한 패턴 찾기
-                    # 간단하게 gradio_client를 통해 가져오기
-                    logger.warning("⚠️  API info not found in client, using gradio_client's internal method")
                     # gradio_client가 이미 초기화되어 있으므로 그대로 사용
+                    logger.warning("⚠️  API info not found in client, using gradio_client's internal method")
                     self._api_info = {}
-                
-                logger.info(f"✅ API info retrieved successfully")
+
+                logger.info("✅ API info retrieved successfully")
             except Exception as e:
                 logger.error(f"❌ Failed to get API info: {e}")
                 # API 정보가 없어도 계속 진행 (gradio_client가 처리)
@@ -328,14 +319,14 @@ class TTSEngine(TTSInterface):
                     # 수정: 상태 확인 - /api/queue/status 경로 사용
                     status_url = f"{base_url}/api/queue/status"
                     status_payload = {"hash": job_hash}
-                    status_response = http_client.post(status_url, json=status_payload)
+                    status_response = requests.post(status_url, json=status_payload, timeout=30.0)
                     status_response.raise_for_status()
                     status_data = status_response.json()
-                    
+
                     if status_data.get("status") == "COMPLETE":
                         # 결과 가져오기
                         result_url = f"{base_url}/api/queue/result"
-                        result_response = http_client.post(result_url, json={"hash": job_hash})
+                        result_response = requests.post(result_url, json={"hash": job_hash}, timeout=30.0)
                         result_response.raise_for_status()
                         result_data = result_response.json()
                         result = result_data.get("data", [])
@@ -458,7 +449,7 @@ class TTSEngine(TTSInterface):
                             except Exception as e:
                                 logger.debug(f"⚠️  Could not reset predict function: {e}")
                     
-                    logger.info(f"✅ Disabled WebSocket for all endpoints, using HTTP only")
+                    logger.info("✅ Disabled WebSocket for all endpoints, using HTTP only")
                 
                 logger.info(f"✅ Connected to Bert-VITS2 server at {self.client_url}")
             except Exception as e:
@@ -499,7 +490,7 @@ class TTSEngine(TTSInterface):
                             if isinstance(self.client._client.headers, dict):
                                 self.client._client.headers["Origin"] = origin
                                 self.client._client.headers["User-Agent"] = "gradio-client"
-                        logger.info(f"✅ Connected to Bert-VITS2 server (retry successful)")
+                        logger.info("✅ Connected to Bert-VITS2 server (retry successful)")
                     except Exception as retry_error:
                         logger.error(f"❌ Retry also failed: {retry_error}")
                         raise
@@ -552,7 +543,7 @@ class TTSEngine(TTSInterface):
             return ""
 
         try:
-            client = self._get_client()
+            self._get_client()
 
             # Get language-specific config
             lang_config = self._get_lang_config(current_language)
@@ -633,7 +624,7 @@ class TTSEngine(TTSInterface):
                 logger.warning("⚠️  WebSocket connection issue detected, resetting client...")
                 self.client = None
                 try:
-                    client = self._get_client()
+                    self._get_client()
                     logger.info("✅ Client reset successful, retrying audio generation...")
                     # 재시도는 호출자가 처리하도록 빈 문자열 반환
                 except Exception as retry_error:
