@@ -145,3 +145,9 @@ python3 app.py --server-name 0.0.0.0 --no-autolaunch --share
 - Updated TTS integration pieces in `Open-LLM-VTuber-1.2.1/src/open_llm_vtuber/tts/bert_vits2_tts.py` and related config managers.
 - Added `test_lang_detect_tts.py` for language-detection TTS checks.
 - Added `install.sh` helper script.
+
+## Runtime Issue Log
+- 2025-12-21: `./start_both.sh` fails during Open-LLM-VTuber init with `TTSEngine.__init__() got an unexpected keyword argument 'model_name'`.
+  - Observed at `Open-LLM-VTuber-1.2.1/src/open_llm_vtuber/service_context.py` → `TTSFactory.get_tts_engine(...)`.
+  - Likely cause: `Open-LLM-VTuber-1.2.1/src/open_llm_vtuber/tts/tts_factory.py` passes legacy args (`model_name`, `model_path`, `speaker`, `language`, `style`, `style_weight`), but `Open-LLM-VTuber-1.2.1/src/open_llm_vtuber/tts/bert_vits2_tts.py` now expects language-specific dicts (`en`, `jp`) and no `model_name` keyword.
+  - Fix applied: updated `Open-LLM-VTuber-1.2.1/src/open_llm_vtuber/tts/tts_factory.py` to pass `en/jp` configs and language controls instead of legacy `model_name` args.

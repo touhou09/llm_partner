@@ -177,12 +177,10 @@ class TTSFactory:
 
             return BertVITS2TTSEngine(
                 client_url=kwargs.get("client_url"),
-                model_name=kwargs.get("model_name"),
-                model_path=kwargs.get("model_path"),
-                speaker=kwargs.get("speaker"),
-                language=kwargs.get("language"),
-                style=kwargs.get("style"),
-                style_weight=kwargs.get("style_weight"),
+                auto_detect_language=kwargs.get("auto_detect_language", True),
+                default_language=kwargs.get("default_language", "EN"),
+                en=kwargs.get("en"),
+                jp=kwargs.get("jp"),
                 sdp_ratio=kwargs.get("sdp_ratio"),
                 noise_scale=kwargs.get("noise_scale"),
                 noise_scale_w=kwargs.get("noise_scale_w"),
