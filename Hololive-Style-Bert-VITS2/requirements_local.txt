@@ -1,0 +1,32 @@
+cmudict
+cn2an
+g2p_en
+GPUtil
+gradio
+jaconv
+jieba
+langid
+librosa==0.9.2
+loguru
+matplotlib
+mecab-python3
+num2words
+numba
+numpy
+psutil
+pyannote.audio
+pydantic>=2.0
+pyloudnorm
+# pyopenjtalk-prebuilt
+pyopenjtalk-dict
+pypinyin
+pyworld-prebuilt
+PyYAML
+requests
+safetensors
+scipy
+sentencepiece
+tensorboard
+torch>=2.1,<2.2 # For users without GPU or colab
+transformers
+umap-learn

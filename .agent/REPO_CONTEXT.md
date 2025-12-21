@@ -151,3 +151,12 @@ python3 app.py --server-name 0.0.0.0 --no-autolaunch --share
   - Observed at `Open-LLM-VTuber-1.2.1/src/open_llm_vtuber/service_context.py` → `TTSFactory.get_tts_engine(...)`.
   - Likely cause: `Open-LLM-VTuber-1.2.1/src/open_llm_vtuber/tts/tts_factory.py` passes legacy args (`model_name`, `model_path`, `speaker`, `language`, `style`, `style_weight`), but `Open-LLM-VTuber-1.2.1/src/open_llm_vtuber/tts/bert_vits2_tts.py` now expects language-specific dicts (`en`, `jp`) and no `model_name` keyword.
   - Fix applied: updated `Open-LLM-VTuber-1.2.1/src/open_llm_vtuber/tts/tts_factory.py` to pass `en/jp` configs and language controls instead of legacy `model_name` args.
+- 2025-12-21: Bert-VITS2 inference logs show `size mismatch for enc_p.language_emb.weight` (checkpoint has 3 languages, model expects 2).
+  - Observed from `Hololive-Style-Bert-VITS2/common/tts_model.py` during `SynthesizerTrn` load.
+  - Fix applied: align language embedding size with checkpoint by setting `num_languages = 3` in `Hololive-Style-Bert-VITS2/text/symbols.py` and restoring `ZH` to the ID map for compatibility (ZH remains unused in UI).
+- 2025-12-21: Bert-VITS2 inference errors: `The size of tensor a (2) must match the size of tensor b (0) at non-singleton dimension 2`, followed by `No audio segments were generated. Returning silence.`
+  - Observed during `Hololive-Style-Bert-VITS2/common/tts_model.py` segment inference.
+  - Likely cause: BERT feature length mismatch (0-length) vs phone/embedding length during `models.py` forward (`bert_emb`/`ja_bert_emb`/`en_bert_emb` summation).
+  - Suggested fix: in `Hololive-Style-Bert-VITS2/infer.py`, if BERT feature length is 0 or does not match `len(phone)`, fallback to zero tensors sized to `len(phone)` to avoid shape mismatch.
+  - Fix applied: added length guards and a retry path in `Hololive-Style-Bert-VITS2/infer.py` to zero out tones/lang_ids/BERT tensors when mismatch occurs.
+  - Status: TTS requests now complete without the size-mismatch crash and audio outputs play correctly.
